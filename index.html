@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>3DREAM · Stock de Filamentos</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0f1220">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#0f1220; --panel:#1a1f35; --panel2:#232a4a; --text:#e8eaf6;
+    --muted:#9aa3c7; --accent:#6c8cff; --accent2:#42d6a4; --danger:#ff5d73;
+    --warn:#ffb648; --border:#2e3660;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{font-family:'Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); padding:16px;}
+  h1{font-size:1.5rem; margin-bottom:4px;}
+  h1 span{color:var(--accent);}
+  .sub{color:var(--muted); font-size:.85rem; margin-bottom:18px;}
+  h2{font-size:1.05rem; margin-bottom:10px; color:var(--muted); font-weight:600;}
+
+  /* Tarjetas resumen */
+  .cards{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:18px;}
+  .card{background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:14px 16px;}
+  .card .val{font-size:1.7rem; font-weight:700;}
+  .card .lbl{color:var(--muted); font-size:.8rem; margin-top:2px;}
+  .card.c1 .val{color:var(--accent);} .card.c2 .val{color:var(--accent2);}
+  .card.c3 .val{color:var(--warn);} .card.c4 .val{color:#c792ea;}
+
+  /* Gráficos */
+  .charts{display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:12px; margin-bottom:22px;}
+  .chartbox{background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:14px; height:280px; display:flex; flex-direction:column;}
+  .chartbox canvas{flex:1; min-height:0;}
+
+  /* Formulario */
+  .formbox{background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:22px;}
+  .formgrid{display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px;}
+  label{display:block; font-size:.75rem; color:var(--muted); margin-bottom:4px;}
+  input,select{width:100%; padding:8px 10px; border-radius:8px; border:1px solid var(--border); background:var(--panel2); color:var(--text); font-size:.9rem;}
+  input:focus,select:focus{outline:2px solid var(--accent);}
+  input[type=color]{padding:2px; height:37px; cursor:pointer;}
+  .btnrow{margin-top:12px; display:flex; gap:8px; flex-wrap:wrap;}
+  button{padding:9px 16px; border:none; border-radius:8px; font-size:.9rem; font-weight:600; cursor:pointer;}
+  .btn-add{background:var(--accent); color:#fff;}
+  .btn-cancel{background:var(--panel2); color:var(--muted);}
+  .btn-exp,.btn-imp{background:var(--panel2); color:var(--text); font-size:.8rem; padding:7px 12px;}
+  button:hover{filter:brightness(1.15);}
+
+  /* Tabla */
+  .tablebox{background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:16px; overflow-x:auto;}
+  .toolbar{display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:12px;}
+  .toolbar input{max-width:240px;}
+  table{width:100%; border-collapse:collapse; font-size:.88rem;}
+  th{color:var(--muted); text-align:left; padding:8px 10px; border-bottom:2px solid var(--border); cursor:pointer; user-select:none; white-space:nowrap;}
+  th:hover{color:var(--accent);}
+  th .arrow{font-size:.7rem;}
+  td{padding:8px 10px; border-bottom:1px solid var(--border);}
+  tr:hover td{background:rgba(108,140,255,.06);}
+  .swatch{display:inline-block; width:14px; height:14px; border-radius:4px; margin-right:6px; vertical-align:-2px; border:1px solid #fff3;}
+  .low{color:var(--danger); font-weight:700;}
+  .actions button{padding:4px 9px; font-size:.75rem; margin-right:4px;}
+  .btn-edit{background:var(--warn); color:#222;}
+  .btn-del{background:var(--danger); color:#fff;}
+  .empty{text-align:center; color:var(--muted); padding:24px;}
+  @media(max-width:600px){ .charts{grid-template-columns:1fr;} }
+</style>
+</head>
+<body>
+
+<h1>🖨️ <span>3DREAM</span> · Stock de Filamentos</h1>
+<div class="sub">Base de datos de bobinas — los datos se guardan en este dispositivo</div>
+
+<!-- RESUMEN -->
+<div class="cards">
+  <div class="card c1"><div class="val" id="totBob">0</div><div class="lbl">Bobinas totales</div></div>
+  <div class="card c2"><div class="val" id="totKg">0 kg</div><div class="lbl">Peso restante</div></div>
+  <div class="card c3"><div class="val" id="totMarcas">0</div><div class="lbl">Marcas</div></div>
+  <div class="card c4"><div class="val" id="totColores">0</div><div class="lbl">Colores</div></div>
+</div>
+
+<div class="charts">
+  <div class="chartbox"><h2>Por tipo de filamento</h2><canvas id="chTipo"></canvas></div>
+  <div class="chartbox"><h2>Por marca</h2><canvas id="chMarca"></canvas></div>
+  <div class="chartbox"><h2>Por color</h2><canvas id="chColor"></canvas></div>
+</div>
+
+<!-- FORMULARIO -->
+<div class="formbox">
+  <h2 id="formTitle">➕ Añadir filamento</h2>
+  <div class="formgrid">
+    <div><label>Marca *</label><input id="fMarca" list="marcasList" placeholder="Ej: eSUN"><datalist id="marcasList"></datalist></div>
+    <div><label>Tipo *</label>
+      <select id="fTipo" onchange="toggleOtro()"></select>
+    </div>
+    <div id="otroBox" style="display:none"><label>Nuevo tipo *</label><input id="fTipoOtro" placeholder="Ej: HIPS"></div>
+    <div><label>Color *</label><input id="fColor" placeholder="Ej: Rojo"></div>
+    <div><label>Muestra de color</label><input type="color" id="fHex" value="#6c8cff"></div>
+    <div><label>Nº bobinas *</label><input type="number" id="fBob" min="0" step="1" placeholder="1"></div>
+    <div><label>Gramos restantes *</label><input type="number" id="fGr" min="0" step="10" placeholder="1000"></div>
+    <div><label>Notas</label><input id="fNotas" placeholder="Opcional"></div>
+  </div>
+  <div class="btnrow">
+    <button class="btn-add" id="btnSave" onclick="guardar()">Añadir</button>
+    <button class="btn-cancel" id="btnCancel" onclick="cancelarEdicion()" style="display:none">Cancelar</button>
+  </div>
+</div>
+
+<!-- TABLA -->
+<div class="tablebox">
+  <div class="toolbar">
+    <h2 style="margin:0">📋 Inventario</h2>
+    <input id="buscar" placeholder="🔍 Buscar..." oninput="render()">
+    <button class="btn-exp" onclick="exportar()">⬇ Exportar copia</button>
+    <button class="btn-imp" onclick="document.getElementById('fileImp').click()">⬆ Importar copia</button>
+    <input type="file" id="fileImp" accept=".json" style="display:none" onchange="importar(event)">
+  </div>
+  <table>
+    <thead><tr>
+      <th onclick="ordenar('marca')">Marca <span class="arrow" id="ar-marca"></span></th>
+      <th onclick="ordenar('tipo')">Tipo <span class="arrow" id="ar-tipo"></span></th>
+      <th onclick="ordenar('color')">Color <span class="arrow" id="ar-color"></span></th>
+      <th onclick="ordenar('bobinas')">Bobinas <span class="arrow" id="ar-bobinas"></span></th>
+      <th onclick="ordenar('gramos')">Gramos <span class="arrow" id="ar-gramos"></span></th>
+      <th>Notas</th><th>Acciones</th>
+    </tr></thead>
+    <tbody id="tbody"></tbody>
+  </table>
+</div>
+
+<script>
+const KEY='filamentos3dream', KEYTIPOS='filamentos3dreamTipos';
+const TIPOS_BASE=['PLA','PLA+','PLA Silk','PLA Mate','PETG','ABS','ASA','TPU','PA','PC','PVA'];
+let datos=[], tiposCustom=[], sortCol='marca', sortDir=1, editId=null;
+let charts={};
+
+function cargar(){
+  try{ datos=JSON.parse(localStorage.getItem(KEY))||[]; }catch(e){ datos=[]; }
+  try{ tiposCustom=JSON.parse(localStorage.getItem(KEYTIPOS))||[]; }catch(e){ tiposCustom=[]; }
+}
+function persistir(){
+  localStorage.setItem(KEY, JSON.stringify(datos));
+  localStorage.setItem(KEYTIPOS, JSON.stringify(tiposCustom));
+}
+
+function rellenarTipos(sel){
+  const el=document.getElementById('fTipo'), actual=sel||el.value;
+  el.innerHTML=[...TIPOS_BASE,...tiposCustom].map(t=>`<option>${esc(t)}</option>`).join('')+'<option>Otro</option>';
+  if([...el.options].some(o=>o.value===actual)) el.value=actual;
+  toggleOtro();
+}
+
+function toggleOtro(){
+  document.getElementById('otroBox').style.display = v('fTipo')==='Otro' ? 'block' : 'none';
+}
+
+function guardar(){
+  const marca=v('fMarca'), color=v('fColor'),
+        hex=v('fHex'), notas=v('fNotas'),
+        bob=parseInt(v('fBob')), gr=parseFloat(v('fGr'));
+  let tipo=v('fTipo');
+  if(tipo==='Otro'){
+    tipo=v('fTipoOtro');
+    if(!tipo){ alert('Escribe el nuevo tipo de filamento.'); return; }
+    if(![...TIPOS_BASE,...tiposCustom].some(t=>t.toLowerCase()===tipo.toLowerCase())){
+      tiposCustom.push(tipo);
+    }
+  }
+  if(!marca||!color||isNaN(bob)||isNaN(gr)){ alert('Rellena marca, color, nº de bobinas y gramos.'); return; }
+  if(editId!==null){
+    const f=datos.find(d=>d.id===editId);
+    Object.assign(f,{marca,tipo,color,hex,bobinas:bob,gramos:gr,notas});
+    editId=null;
+  }else{
+    datos.push({id:Date.now(),marca,tipo,color,hex,bobinas:bob,gramos:gr,notas});
+  }
+  persistir(); rellenarTipos(); limpiarForm(); render();
+}
+
+function editar(id){
+  const f=datos.find(d=>d.id===id); if(!f) return;
+  editId=id;
+  if(![...TIPOS_BASE,...tiposCustom].includes(f.tipo)){ tiposCustom.push(f.tipo); rellenarTipos(); }
+  sv('fMarca',f.marca); sv('fTipo',f.tipo); toggleOtro(); sv('fColor',f.color);
+  sv('fHex',f.hex||'#6c8cff'); sv('fBob',f.bobinas); sv('fGr',f.gramos); sv('fNotas',f.notas||'');
+  document.getElementById('formTitle').textContent='✏️ Editar filamento';
+  document.getElementById('btnSave').textContent='Actualizar';
+  document.getElementById('btnCancel').style.display='inline-block';
+  document.getElementById('fMarca').focus();
+  window.scrollTo({top:document.querySelector('.formbox').offsetTop-10,behavior:'smooth'});
+}
+
+function cancelarEdicion(){ editId=null; limpiarForm(); }
+
+function limpiarForm(){
+  ['fMarca','fColor','fBob','fGr','fNotas','fTipoOtro'].forEach(i=>sv(i,''));
+  sv('fHex','#6c8cff');
+  document.getElementById('fTipo').selectedIndex=0; toggleOtro();
+  document.getElementById('formTitle').textContent='➕ Añadir filamento';
+  document.getElementById('btnSave').textContent='Añadir';
+  document.getElementById('btnCancel').style.display='none';
+}
+
+function borrar(id){
+  const f=datos.find(d=>d.id===id);
+  if(confirm(`¿Eliminar ${f.marca} ${f.tipo} ${f.color}?`)){
+    datos=datos.filter(d=>d.id!==id);
+    if(editId===id) cancelarEdicion();
+    persistir(); render();
+  }
+}
+
+function ordenar(col){
+  if(sortCol===col) sortDir*=-1; else { sortCol=col; sortDir=1; }
+  render();
+}
+
+function render(){
+  const q=v('buscar').toLowerCase();
+  let lista=datos.filter(d=>(d.marca+' '+d.tipo+' '+d.color+' '+(d.notas||'')).toLowerCase().includes(q));
+  lista.sort((a,b)=>{
+    let x=a[sortCol], y=b[sortCol];
+    if(typeof x==='string'){ x=x.toLowerCase(); y=y.toLowerCase(); }
+    return (x<y?-1:x>y?1:0)*sortDir;
+  });
+  // flechas
+  ['marca','tipo','color','bobinas','gramos'].forEach(c=>{
+    document.getElementById('ar-'+c).textContent = c===sortCol ? (sortDir===1?'▲':'▼') : '';
+  });
+  // tabla
+  const tb=document.getElementById('tbody');
+  tb.innerHTML = lista.length===0 ? '<tr><td colspan="7" class="empty">Sin filamentos. ¡Añade el primero!</td></tr>'
+    : lista.map(d=>`<tr>
+      <td>${esc(d.marca)}</td>
+      <td>${esc(d.tipo)}</td>
+      <td><span class="swatch" style="background:${d.hex||'#888'}"></span>${esc(d.color)}</td>
+      <td>${d.bobinas}</td>
+      <td class="${d.gramos<200?'low':''}">${d.gramos} g${d.gramos<200?' ⚠️':''}</td>
+      <td>${esc(d.notas||'')}</td>
+      <td class="actions">
+        <button class="btn-edit" onclick="editar(${d.id})">✏️</button>
+        <button class="btn-del" onclick="borrar(${d.id})">🗑️</button>
+      </td></tr>`).join('');
+  // datalist marcas
+  document.getElementById('marcasList').innerHTML=[...new Set(datos.map(d=>d.marca))].map(m=>`<option value="${esc(m)}">`).join('');
+  actualizarResumen();
+}
+
+function actualizarResumen(){
+  const totB=datos.reduce((s,d)=>s+d.bobinas,0);
+  const totG=datos.reduce((s,d)=>s+d.gramos,0);
+  document.getElementById('totBob').textContent=totB;
+  document.getElementById('totKg').textContent=(totG/1000).toFixed(2)+' kg';
+  document.getElementById('totMarcas').textContent=new Set(datos.map(d=>d.marca.toLowerCase())).size;
+  document.getElementById('totColores').textContent=new Set(datos.map(d=>d.color.toLowerCase())).size;
+  dibujarGraficos();
+}
+
+function agrupar(campo){
+  const m={};
+  datos.forEach(d=>{ const k=d[campo]; m[k]=(m[k]||0)+d.gramos; });
+  return m;
+}
+
+const PALETA=['#6c8cff','#42d6a4','#ffb648','#c792ea','#ff5d73','#4dd0e1','#f48fb1','#aed581','#ffd54f','#90a4ae','#7986cb','#e57373'];
+
+function dibujarGraficos(){
+  const base={responsive:true, maintainAspectRatio:false,
+    plugins:{legend:{position:'bottom',labels:{color:'#9aa3c7',boxWidth:12,font:{size:11}}},
+      tooltip:{callbacks:{label:c=>` ${c.label}: ${c.parsed.y??c.parsed} g`}}}};
+
+  const gTipo=agrupar('tipo'), gMarca=agrupar('marca');
+  // por color usamos el hex real si existe
+  const colMap={}, colHex={};
+  datos.forEach(d=>{ colMap[d.color]=(colMap[d.color]||0)+d.gramos; if(d.hex) colHex[d.color]=d.hex; });
+
+  hacer('chTipo','doughnut',Object.keys(gTipo),Object.values(gTipo),PALETA,base);
+  hacer('chMarca','bar',Object.keys(gMarca),Object.values(gMarca),PALETA,{...base,
+    plugins:{...base.plugins,legend:{display:false}},
+    scales:{x:{ticks:{color:'#9aa3c7'},grid:{color:'#2e3660'}},
+            y:{ticks:{color:'#9aa3c7'},grid:{color:'#2e3660'},title:{display:true,text:'gramos',color:'#9aa3c7'}}}});
+  hacer('chColor','doughnut',Object.keys(colMap),Object.values(colMap),
+    Object.keys(colMap).map((c,i)=>colHex[c]||PALETA[i%PALETA.length]),base);
+}
+
+function hacer(id,tipo,labels,vals,colores,opts){
+  if(charts[id]) charts[id].destroy();
+  charts[id]=new Chart(document.getElementById(id),{
+    type:tipo,
+    data:{labels,datasets:[{data:vals,backgroundColor:colores,borderColor:'#1a1f35',borderWidth:2}]},
+    options:opts
+  });
+}
+
+function exportar(){
+  const blob=new Blob([JSON.stringify(datos,null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='filamentos-3dream-'+new Date().toISOString().slice(0,10)+'.json';
+  a.click();
+}
+
+function importar(ev){
+  const file=ev.target.files[0]; if(!file) return;
+  const r=new FileReader();
+  r.onload=e=>{
+    try{
+      const arr=JSON.parse(e.target.result);
+      if(!Array.isArray(arr)) throw 0;
+      if(confirm(`Importar ${arr.length} filamentos (sustituye los actuales)?`)){
+        datos=arr;
+        datos.forEach(d=>{ if(d.tipo&&![...TIPOS_BASE,...tiposCustom].includes(d.tipo)) tiposCustom.push(d.tipo); });
+        persistir(); rellenarTipos(); render();
+      }
+    }catch(_){ alert('Archivo no válido.'); }
+  };
+  r.readAsText(file);
+  ev.target.value='';
+}
+
+function v(id){ return document.getElementById(id).value.trim(); }
+function sv(id,val){ document.getElementById(id).value=val; }
+function esc(s){ return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+cargar(); rellenarTipos(); render();
+
+// Registro del service worker (funcionamiento offline + instalable)
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('sw.js');
+}
+</script>
+</body>
+</html>
