@@ -1,4 +1,4 @@
-const CACHE = '3dream-v1';
+const CACHE = '3dream-v2';
 const FILES = [
   './',
   './index.html',

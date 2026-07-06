@@ -65,6 +65,12 @@
   .btn-edit{background:var(--warn); color:#222;}
   .btn-del{background:var(--danger); color:#fff;}
   .empty{text-align:center; color:var(--muted); padding:24px;}
+
+  /* Notificación (toast) */
+  #toast{position:fixed; left:50%; bottom:20px; transform:translateX(-50%); background:var(--panel2);
+    border:1px solid var(--accent); border-radius:10px; padding:12px 16px; display:flex; gap:14px;
+    align-items:center; box-shadow:0 4px 20px #0008; z-index:99; max-width:92vw; font-size:.88rem;}
+  #toast button{background:var(--accent); color:#fff; padding:6px 12px; font-size:.8rem; white-space:nowrap;}
   @media(max-width:600px){ .charts{grid-template-columns:1fr;} }
 </style>
 </head>
@@ -91,12 +97,14 @@
 <div class="formbox">
   <h2 id="formTitle">➕ Añadir filamento</h2>
   <div class="formgrid">
-    <div><label>Marca *</label><input id="fMarca" list="marcasList" placeholder="Ej: eSUN"><datalist id="marcasList"></datalist></div>
+    <div><label>Marca *</label><select id="fMarca" onchange="toggleMarcaOtra()"></select></div>
+    <div id="marcaOtraBox" style="display:none"><label>Nueva marca *</label><input id="fMarcaOtra" placeholder="Ej: eSUN"></div>
     <div><label>Tipo *</label>
       <select id="fTipo" onchange="toggleOtro()"></select>
     </div>
     <div id="otroBox" style="display:none"><label>Nuevo tipo *</label><input id="fTipoOtro" placeholder="Ej: HIPS"></div>
-    <div><label>Color *</label><input id="fColor" placeholder="Ej: Rojo"></div>
+    <div><label>Color *</label><select id="fColor" onchange="colorSeleccionado()"></select></div>
+    <div id="colorOtroBox" style="display:none"><label>Nuevo color *</label><input id="fColorOtro" placeholder="Ej: Melocotón" oninput="autoHex()"></div>
     <div><label>Muestra de color</label><input type="color" id="fHex" value="#6c8cff"></div>
     <div><label>Nº bobinas *</label><input type="number" id="fBob" min="0" step="1" placeholder="1"></div>
     <div><label>Gramos restantes *</label><input type="number" id="fGr" min="0" step="10" placeholder="1000"></div>
@@ -130,19 +138,137 @@
   </table>
 </div>
 
+<div id="toast" style="display:none"><span id="toastMsg"></span><button onclick="deshacerToast()">Deshacer</button></div>
+
 <script>
-const KEY='filamentos3dream', KEYTIPOS='filamentos3dreamTipos';
+const KEY='filamentos3dream', KEYTIPOS='filamentos3dreamTipos',
+      KEYMARCAS='filamentos3dreamMarcas', KEYCOLORES='filamentos3dreamColores';
 const TIPOS_BASE=['PLA','PLA+','PLA Silk','PLA Mate','PETG','ABS','ASA','TPU','PA','PC','PVA'];
-let datos=[], tiposCustom=[], sortCol='marca', sortDir=1, editId=null;
+let datos=[], tiposCustom=[], marcasGuardadas=[], coloresGuardados=[], sortCol='marca', sortDir=1, editId=null;
 let charts={};
 
 function cargar(){
   try{ datos=JSON.parse(localStorage.getItem(KEY))||[]; }catch(e){ datos=[]; }
   try{ tiposCustom=JSON.parse(localStorage.getItem(KEYTIPOS))||[]; }catch(e){ tiposCustom=[]; }
+  try{ marcasGuardadas=JSON.parse(localStorage.getItem(KEYMARCAS))||[]; }catch(e){ marcasGuardadas=[]; }
+  try{ coloresGuardados=JSON.parse(localStorage.getItem(KEYCOLORES))||[]; }catch(e){ coloresGuardados=[]; }
+  sembrar();
 }
 function persistir(){
   localStorage.setItem(KEY, JSON.stringify(datos));
   localStorage.setItem(KEYTIPOS, JSON.stringify(tiposCustom));
+  localStorage.setItem(KEYMARCAS, JSON.stringify(marcasGuardadas));
+  localStorage.setItem(KEYCOLORES, JSON.stringify(coloresGuardados));
+}
+
+// Añade a las listas los tipos/marcas/colores presentes en los datos
+function sembrar(){
+  datos.forEach(d=>{
+    if(d.tipo&&![...TIPOS_BASE,...tiposCustom].some(t=>norm(t)===norm(d.tipo))) tiposCustom.push(d.tipo);
+    if(d.marca&&!marcasGuardadas.some(m=>norm(m)===norm(d.marca))) marcasGuardadas.push(d.marca);
+    if(d.color&&!coloresGuardados.some(c=>norm(c.n)===norm(d.color))) coloresGuardados.push({n:d.color,hex:d.hex||'#888888'});
+  });
+}
+
+function norm(s){ return String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim(); }
+
+// Distancia de Levenshtein (nº de letras de diferencia)
+function lev(a,b){
+  const m=a.length, n=b.length;
+  if(!m) return n; if(!n) return m;
+  let prev=[...Array(n+1).keys()];
+  for(let i=1;i<=m;i++){
+    const cur=[i];
+    for(let j=1;j<=n;j++)
+      cur[j]=Math.min(prev[j]+1, cur[j-1]+1, prev[j-1]+(a[i-1]===b[j-1]?0:1));
+    prev=cur;
+  }
+  return prev[n];
+}
+
+// Diccionario nombre de color → hex (claves sin acentos)
+const COLORES_MAP={rojo:'#e53935',carmesi:'#d32f2f',granate:'#800000',burdeos:'#6d071a',vino:'#722f37',
+cereza:'#de3163',azul:'#1e88e5','azul marino':'#0d2c6b','azul claro':'#64b5f6','azul cielo':'#87ceeb',
+celeste:'#87ceeb',turquesa:'#1abc9c',cian:'#00bcd4',zafiro:'#0f52ba',verde:'#43a047','verde oscuro':'#1b5e20',
+'verde lima':'#aeea00',lima:'#cddc39',menta:'#98ffcc',esmeralda:'#2ecc71',oliva:'#808000',amarillo:'#fdd835',
+mostaza:'#e1ad01',dorado:'#d4af37',oro:'#d4af37',naranja:'#fb8c00',melocoton:'#ffcba4',salmon:'#fa8072',
+coral:'#ff7f50',teja:'#c65d3b',rosa:'#ec407a','rosa claro':'#f8bbd0',fucsia:'#e91e63',magenta:'#d500f9',
+morado:'#8e24aa',violeta:'#7c4dff',purpura:'#6a1b9a',lila:'#c8a2c8',lavanda:'#b57edc',marron:'#795548',
+chocolate:'#5d4037',madera:'#a0522d',beige:'#d7c4a3',crema:'#f5f0dc',marfil:'#fffff0',arena:'#e0c9a6',
+blanco:'#f5f5f5',negro:'#1a1a1a',gris:'#9e9e9e','gris oscuro':'#555555','gris claro':'#cfcfcf',
+plata:'#c0c0c0',plateado:'#c0c0c0',cobre:'#b87333',bronce:'#cd7f32',transparente:'#e6f2f5',
+natural:'#efe9dc',caqui:'#c3b091'};
+
+// Al escribir el nombre de un color nuevo, busca uno parecido y ajusta la muestra
+function autoHex(){
+  const t=norm(v('fColorOtro')); if(!t) return;
+  let mejor=null;
+  for(const k in COLORES_MAP){
+    if(t===k){ mejor=k; break; }
+    if(t.includes(k)&&(!mejor||k.length>mejor.length)) mejor=k;
+  }
+  if(!mejor){
+    let md=3;
+    for(const k in COLORES_MAP){
+      const d=lev(t,k);
+      if(d<md){ md=d; mejor=k; }
+    }
+    if(md>2) mejor=null;
+  }
+  if(mejor) sv('fHex',COLORES_MAP[mejor]);
+}
+
+// Busca una marca ya guardada con nombre muy parecido
+function marcaSimilar(texto){
+  const nt=norm(texto);
+  let mejor=null, md=Infinity;
+  for(const m of marcasGuardadas){
+    const d=lev(nt,norm(m));
+    if(d<md){ md=d; mejor=m; }
+  }
+  const umbral=nt.length>=6?2:1;
+  return (mejor&&md>0&&md<=umbral)?mejor:null;
+}
+
+function rellenarMarcas(){
+  const el=document.getElementById('fMarca'), actual=el.value;
+  el.innerHTML=[...marcasGuardadas].sort((a,b)=>a.localeCompare(b)).map(m=>`<option>${esc(m)}</option>`).join('')+'<option>Otra</option>';
+  el.value=[...el.options].some(o=>o.value===actual)?actual:el.options[0].value;
+  toggleMarcaOtra();
+}
+
+function rellenarColores(){
+  const el=document.getElementById('fColor'), actual=el.value;
+  el.innerHTML=coloresGuardados.map(c=>c.n).sort((a,b)=>a.localeCompare(b)).map(c=>`<option>${esc(c)}</option>`).join('')+'<option>Otro</option>';
+  el.value=[...el.options].some(o=>o.value===actual)?actual:el.options[0].value;
+  colorSeleccionado();
+}
+
+function toggleMarcaOtra(){
+  document.getElementById('marcaOtraBox').style.display = v('fMarca')==='Otra' ? 'block' : 'none';
+}
+
+function colorSeleccionado(){
+  const val=v('fColor');
+  document.getElementById('colorOtroBox').style.display = val==='Otro' ? 'block' : 'none';
+  if(val!=='Otro'){
+    const ex=coloresGuardados.find(c=>c.n===val);
+    if(ex&&ex.hex) sv('fHex',ex.hex);
+  }
+}
+
+function toast(msg,undoFn){
+  const t=document.getElementById('toast');
+  document.getElementById('toastMsg').innerHTML=msg;
+  t.style.display='flex';
+  t._undo=undoFn;
+  clearTimeout(t._timer);
+  t._timer=setTimeout(()=>t.style.display='none',8000);
+}
+function deshacerToast(){
+  const t=document.getElementById('toast');
+  if(t._undo) t._undo();
+  t._undo=null; t.style.display='none';
 }
 
 function rellenarTipos(sel){
@@ -157,33 +283,71 @@ function toggleOtro(){
 }
 
 function guardar(){
-  const marca=v('fMarca'), color=v('fColor'),
-        hex=v('fHex'), notas=v('fNotas'),
+  const hex=v('fHex'), notas=v('fNotas'),
         bob=parseInt(v('fBob')), gr=parseFloat(v('fGr'));
+  // Tipo
   let tipo=v('fTipo');
   if(tipo==='Otro'){
     tipo=v('fTipoOtro');
     if(!tipo){ alert('Escribe el nuevo tipo de filamento.'); return; }
-    if(![...TIPOS_BASE,...tiposCustom].some(t=>t.toLowerCase()===tipo.toLowerCase())){
-      tiposCustom.push(tipo);
+    if(![...TIPOS_BASE,...tiposCustom].some(t=>norm(t)===norm(tipo))) tiposCustom.push(tipo);
+  }
+  // Marca (con detección de nombres parecidos)
+  let marca=v('fMarca'), avisoMarca=null;
+  if(marca==='Otra'){
+    const escrita=v('fMarcaOtra');
+    if(!escrita){ alert('Escribe la nueva marca.'); return; }
+    const exacta=marcasGuardadas.find(m=>norm(m)===norm(escrita));
+    if(exacta){ marca=exacta; }
+    else{
+      const similar=marcaSimilar(escrita);
+      if(similar){ marca=similar; avisoMarca={escrita,asignada:similar}; }
+      else{ marca=escrita; marcasGuardadas.push(escrita); }
     }
   }
+  // Color
+  let color=v('fColor');
+  if(color==='Otro'){
+    color=v('fColorOtro');
+    if(!color){ alert('Escribe el nuevo color.'); return; }
+    const ex=coloresGuardados.find(c=>norm(c.n)===norm(color));
+    if(ex){ color=ex.n; ex.hex=hex; }
+    else coloresGuardados.push({n:color,hex});
+  }else{
+    const ex=coloresGuardados.find(c=>c.n===color);
+    if(ex) ex.hex=hex;
+  }
   if(!marca||!color||isNaN(bob)||isNaN(gr)){ alert('Rellena marca, color, nº de bobinas y gramos.'); return; }
+  let reg;
   if(editId!==null){
-    const f=datos.find(d=>d.id===editId);
-    Object.assign(f,{marca,tipo,color,hex,bobinas:bob,gramos:gr,notas});
+    reg=datos.find(d=>d.id===editId);
+    Object.assign(reg,{marca,tipo,color,hex,bobinas:bob,gramos:gr,notas});
     editId=null;
   }else{
-    datos.push({id:Date.now(),marca,tipo,color,hex,bobinas:bob,gramos:gr,notas});
+    reg={id:Date.now(),marca,tipo,color,hex,bobinas:bob,gramos:gr,notas};
+    datos.push(reg);
   }
-  persistir(); rellenarTipos(); limpiarForm(); render();
+  if(avisoMarca){
+    const idReg=reg.id, escrita=avisoMarca.escrita;
+    toast(`«${esc(escrita)}» se ha asignado a la marca <b>${esc(avisoMarca.asignada)}</b>`, ()=>{
+      const f=datos.find(d=>d.id===idReg);
+      if(f) f.marca=escrita;
+      if(!marcasGuardadas.some(m=>norm(m)===norm(escrita))) marcasGuardadas.push(escrita);
+      persistir(); rellenarMarcas(); render();
+    });
+  }
+  persistir(); rellenarTipos(); rellenarMarcas(); rellenarColores(); limpiarForm(); render();
 }
 
 function editar(id){
   const f=datos.find(d=>d.id===id); if(!f) return;
   editId=id;
   if(![...TIPOS_BASE,...tiposCustom].includes(f.tipo)){ tiposCustom.push(f.tipo); rellenarTipos(); }
-  sv('fMarca',f.marca); sv('fTipo',f.tipo); toggleOtro(); sv('fColor',f.color);
+  if(!marcasGuardadas.includes(f.marca)){ marcasGuardadas.push(f.marca); }
+  if(!coloresGuardados.some(c=>c.n===f.color)){ coloresGuardados.push({n:f.color,hex:f.hex||'#888888'}); }
+  rellenarMarcas(); rellenarColores();
+  sv('fMarca',f.marca); toggleMarcaOtra(); sv('fTipo',f.tipo); toggleOtro();
+  sv('fColor',f.color); colorSeleccionado();
   sv('fHex',f.hex||'#6c8cff'); sv('fBob',f.bobinas); sv('fGr',f.gramos); sv('fNotas',f.notas||'');
   document.getElementById('formTitle').textContent='✏️ Editar filamento';
   document.getElementById('btnSave').textContent='Actualizar';
@@ -195,9 +359,11 @@ function editar(id){
 function cancelarEdicion(){ editId=null; limpiarForm(); }
 
 function limpiarForm(){
-  ['fMarca','fColor','fBob','fGr','fNotas','fTipoOtro'].forEach(i=>sv(i,''));
+  ['fBob','fGr','fNotas','fTipoOtro','fMarcaOtra','fColorOtro'].forEach(i=>sv(i,''));
   sv('fHex','#6c8cff');
   document.getElementById('fTipo').selectedIndex=0; toggleOtro();
+  document.getElementById('fMarca').selectedIndex=0; toggleMarcaOtra();
+  document.getElementById('fColor').selectedIndex=0; colorSeleccionado();
   document.getElementById('formTitle').textContent='➕ Añadir filamento';
   document.getElementById('btnSave').textContent='Añadir';
   document.getElementById('btnCancel').style.display='none';
@@ -243,8 +409,6 @@ function render(){
         <button class="btn-edit" onclick="editar(${d.id})">✏️</button>
         <button class="btn-del" onclick="borrar(${d.id})">🗑️</button>
       </td></tr>`).join('');
-  // datalist marcas
-  document.getElementById('marcasList').innerHTML=[...new Set(datos.map(d=>d.marca))].map(m=>`<option value="${esc(m)}">`).join('');
   actualizarResumen();
 }
 
@@ -311,8 +475,8 @@ function importar(ev){
       if(!Array.isArray(arr)) throw 0;
       if(confirm(`Importar ${arr.length} filamentos (sustituye los actuales)?`)){
         datos=arr;
-        datos.forEach(d=>{ if(d.tipo&&![...TIPOS_BASE,...tiposCustom].includes(d.tipo)) tiposCustom.push(d.tipo); });
-        persistir(); rellenarTipos(); render();
+        sembrar();
+        persistir(); rellenarTipos(); rellenarMarcas(); rellenarColores(); render();
       }
     }catch(_){ alert('Archivo no válido.'); }
   };
@@ -324,7 +488,7 @@ function v(id){ return document.getElementById(id).value.trim(); }
 function sv(id,val){ document.getElementById(id).value=val; }
 function esc(s){ return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
-cargar(); rellenarTipos(); render();
+cargar(); rellenarTipos(); rellenarMarcas(); rellenarColores(); render();
 
 // Registro del service worker (funcionamiento offline + instalable)
 if('serviceWorker' in navigator){
