@@ -8,7 +8,7 @@
 <meta name="theme-color" content="#0f1220">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4" onerror="var s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js';document.head.appendChild(s)"></script>
 <style>
   :root{
     --bg:#0f1220; --panel:#1a1f35; --panel2:#232a4a; --text:#e8eaf6;
@@ -33,7 +33,8 @@
   /* Gráficos */
   .charts{display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:12px; margin-bottom:22px;}
   .chartbox{background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:14px; height:280px; display:flex; flex-direction:column;}
-  .chartbox canvas{flex:1; min-height:0;}
+  .cwrap{position:relative; flex:1; min-height:0;}
+  .nochart{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:var(--muted); text-align:center; font-size:.85rem; padding:10px;}
 
   /* Formulario */
   .formbox{background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:22px;}
@@ -88,9 +89,9 @@
 </div>
 
 <div class="charts">
-  <div class="chartbox"><h2>Por tipo de filamento</h2><canvas id="chTipo"></canvas></div>
-  <div class="chartbox"><h2>Por marca</h2><canvas id="chMarca"></canvas></div>
-  <div class="chartbox"><h2>Por color</h2><canvas id="chColor"></canvas></div>
+  <div class="chartbox"><h2>Por tipo de filamento</h2><div class="cwrap"><canvas id="chTipo"></canvas></div></div>
+  <div class="chartbox"><h2>Por marca</h2><div class="cwrap"><canvas id="chMarca"></canvas></div></div>
+  <div class="chartbox"><h2>Por color</h2><div class="cwrap"><canvas id="chColor"></canvas></div></div>
 </div>
 
 <!-- FORMULARIO -->
@@ -430,7 +431,37 @@ function agrupar(campo){
 
 const PALETA=['#6c8cff','#42d6a4','#ffb648','#c792ea','#ff5d73','#4dd0e1','#f48fb1','#aed581','#ffd54f','#90a4ae','#7986cb','#e57373'];
 
+// Muestra/oculta un mensaje sobre los tres gráficos
+function mensajeGraficos(txt){
+  document.querySelectorAll('.cwrap').forEach(w=>{
+    let m=w.querySelector('.nochart');
+    const cv=w.querySelector('canvas');
+    if(txt){
+      if(!m){ m=document.createElement('div'); m.className='nochart'; w.appendChild(m); }
+      m.textContent=txt; if(cv) cv.style.display='none';
+    }else{
+      if(m) m.remove(); if(cv) cv.style.display='block';
+    }
+  });
+}
+
 function dibujarGraficos(){
+  // Si la librería aún no ha cargado (o falló el CDN), reintenta
+  if(typeof Chart==='undefined'){
+    mensajeGraficos('Cargando gráficos…');
+    if(!window._chartWait){
+      let intentos=0;
+      window._chartWait=setInterval(()=>{
+        intentos++;
+        if(typeof Chart!=='undefined'){ clearInterval(window._chartWait); window._chartWait=null; dibujarGraficos(); }
+        else if(intentos>20){ clearInterval(window._chartWait); window._chartWait=null;
+          mensajeGraficos('No se pudieron cargar los gráficos. Comprueba la conexión y recarga la página.'); }
+      },500);
+    }
+    return;
+  }
+  if(datos.length===0){ mensajeGraficos('Sin datos todavía. Añade tu primer filamento.'); return; }
+  mensajeGraficos(null);
   const base={responsive:true, maintainAspectRatio:false,
     plugins:{legend:{position:'bottom',labels:{color:'#9aa3c7',boxWidth:12,font:{size:11}}},
       tooltip:{callbacks:{label:c=>` ${c.label}: ${c.parsed.y??c.parsed} g`}}}};
